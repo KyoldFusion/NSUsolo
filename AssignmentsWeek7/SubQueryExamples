@@ -1,0 +1,96 @@
+-- Select all payments processed by staff ID 2. Wrap it in an outer query that filters for amounts less than $1
+SELECT *
+FROM (
+	SELECT *
+	FROM payment
+	WHERE staff_id = 2
+) sub
+WHERE amount < 1;
+
+-- Refactor the previous query with a CTE
+WITH sub AS (
+	SELECT *
+	FROM payment
+	WHERE staff_id = 2
+)
+SELECT *
+FROM sub
+WHERE amount < 1;
+
+-- Calculate the average monthly total payment amount with a subquery
+SELECT
+	ROUND(AVG(sum_amount), 2) AS avg_monthly_payment
+FROM (
+	SELECT
+		TO_CHAR(payment_date, 'YYYY-MM') AS payment_year_month,
+		SUM(amount) AS sum_amount
+	FROM payment
+	GROUP BY 1
+	) sub;
+
+-- Refactor the previous query with a CTE
+WITH sub AS (
+	SELECT
+		TO_CHAR(payment_date, 'YYYY-MM') AS payment_year_month,
+		SUM(amount) AS sum_amount
+	FROM payment
+	GROUP BY 1
+)
+SELECT
+	ROUND(AVG(sum_amount), 2) AS avg_monthly_payment
+FROM sub;
+
+-- For each customer, count the total number of rentals made in the latest month of the dataset and the count of rentals made for all time. Use a subquery
+SELECT
+	rental.customer_id,
+	COUNT(rental.rental_id) AS current_month_rentals,
+	customer_rentals_all_time.rentals AS all_time_rentals
+FROM rental
+JOIN (
+	SELECT
+		customer_id,
+		COUNT(rental_id) AS rentals
+	FROM rental
+	GROUP BY 1
+	) customer_rentals_all_time
+	USING (customer_id)
+WHERE rental_date::date = (SELECT MAX(rental_date::date) FROM rental)
+GROUP BY 1, 3;
+
+-- Refactor the previous query with a CTE
+WITH customer_rentals_all_time AS (
+	SELECT
+		customer_id,
+		COUNT(rental_id) AS rentals
+	FROM rental
+	GROUP BY 1
+)
+SELECT
+	rental.customer_id,
+	COUNT(rental.rental_id) AS current_month_rentals,
+	customer_rentals_all_time.rentals AS all_time_rentals
+FROM rental
+JOIN customer_rentals_all_time USING (customer_id)
+WHERE rental_date::date = (SELECT MAX(rental_date::date) FROM rental)
+GROUP BY 1, 3;
+
+-- Bonus: For each month, calculate the total monthly rentals, rentals for all time, and the percentage of rentals for all time
+WITH monthly_rentals AS (
+	SELECT
+		TO_CHAR(rental_date, 'YYYY-MM') AS rental_year_month,
+		COUNT(rental_id) AS rental_count
+	FROM rental
+	GROUP BY 1
+),
+all_time_rentals AS (
+	SELECT
+		COUNT(rental_id) AS rental_count
+	FROM rental
+)
+SELECT
+	monthly_rentals.rental_year_month,
+	monthly_rentals.rental_count AS monthly_rentals,
+	all_time_rentals.rental_count AS all_time_rentals,
+	ROUND(100.00 * monthly_rentals.rental_count / all_time_rentals.rental_count, 2) AS percentage_all_time
+FROM monthly_rentals CROSS JOIN all_time_rentals
+ORDER BY 1;
